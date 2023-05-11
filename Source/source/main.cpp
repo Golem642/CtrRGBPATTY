@@ -322,7 +322,7 @@ void test_LED(LED patern, uint8_t lp)
 {
     LED_MCU MCU_PAT;
 
-				printf("last color = (%u, %u, %u)", &patern.r[31], &patern.g[31], &patern.b[31]);
+    printf("last color = (%u, %u, %u)", &patern.r[31], &patern.g[31], &patern.b[31]);
 
     for (int i = 0; i<=31; i++)
     {
