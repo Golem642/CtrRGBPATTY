@@ -1,4 +1,4 @@
- # CtrRGBPAT2
+# CtrRGBPAT2
 This 3DS application allows the LED color to be changed. In order for this to work, Luma CFW (custom firmware) needs to be installed.
 Thanks to [CPunch](https://github.com/CPunch/CtrRGBPATTY/) for the original project !
 
