@@ -1,6 +1,6 @@
 BasicInfo:
-  Title                   : $(APP_TITLE)
-  ProductCode             : $(APP_PRODUCT_CODE)
+  Title                   : CtrRGBPAT2
+  ProductCode             : Idfk-man-V2
   Logo                    : Nintendo # Nintendo / Licensed / Distributed / iQue / iQueForSystem
 
 RomFs:
@@ -8,7 +8,7 @@ RomFs:
 
 TitleInfo:
   Category                : Application
-  UniqueId                : $(APP_UNIQUE_ID)
+  UniqueId                : 0x027620D37BB
 
 Option:
   UseOnSD                 : true # true if App is to be installed to SD

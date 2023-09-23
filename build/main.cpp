@@ -25,7 +25,7 @@ typedef struct {
     uint8_t b[32];
 } LED_MCU;
 
-std::string menu[9]={
+std::string menu[10]={
     "Set Notification RGB Hex Color",
     "Change pattern for LED",
     "Change animation speed (delay)",
@@ -34,10 +34,11 @@ std::string menu[9]={
     "Change static ending",
     "Install IPS Patch",
     "Test LED with pattern",
+    "Toggle enabled state",
     "Shutdown 3DS"
 };
 
-int selected, CMDS = 9;
+int selected, CMDS = 10;
 
 std::string paterns[4]={
     "Blink  ",
@@ -70,6 +71,7 @@ uint8_t ANIMDELAY = 0x2F;
 uint8_t ANIMSMOOTH = 0x5F;
 uint8_t LOOPBYTE = 0xFF; // no loop
 uint8_t BLINKSPEED = 0x50;
+bool enabled;
 
 bool debugMode = false;
 
@@ -103,6 +105,54 @@ void hexaInput(char* hexaText, int hexaLen, const char* hintText) {
     if (strcmp(keybInput, "") != 0) {
         strcpy(hexaText, keybInput);
     }
+}
+
+int fcopy(const char* source, const char* dest) {
+    FILE *f1 = fopen(source, "rb");
+    if (f1 == NULL) {
+        printf("Cannot open source file\n");
+        return 1;
+    }
+    FILE *f2 = fopen(dest, "wb+");
+    if (f2 == NULL) {
+        printf("Cannot open destination file\n");
+        return 1;
+    }
+    size_t n, m;
+    char buff;
+    m = 0;
+    do {
+        n = fread(&buff, 1, sizeof(buff), f1);
+        if (!feof(f1)) m = fwrite(&buff, 1, n, f2);
+        else m = 0;
+    } while (!feof(f1));
+    if (m) {
+        perror("Error while copying");
+        return 1;
+    }
+    if (fclose(f2)) {
+        perror("Error while closing output file");
+        return 1;
+    }
+    if (fclose(f1)) {
+        perror("Error while closing input file");
+        return 1;
+    }
+    return 0;
+}
+
+void intRGB(std::string hexCode, int *r, int *g, int *b)
+{
+    // Remove the hashtag ...
+    if(hexCode.at(0) == '#') 
+    {
+        hexCode = hexCode.erase(0, 1);
+    }
+
+    // ... and extract the rgb values.
+    std::istringstream(hexCode.substr(0,2)) >> std::hex >> *r;
+    std::istringstream(hexCode.substr(2,2)) >> std::hex >> *g;
+    std::istringstream(hexCode.substr(4,2)) >> std::hex >> *b;
 }
 
 /* Documentation:
@@ -275,9 +325,11 @@ void writepatch(LED note)
     mkdir("/luma", 0777);
     mkdir("/luma/titles", 0777);
     mkdir("/luma/titles/0004013000003502", 0777);
+    mkdir("/luma/sysmodules", 0777);
 
     DIR* dir = opendir("/luma/titles/0004013000003502"); // ! CHANGED IN LAST VERSION TO GO TO /luma/sysmodules !
-    if (dir)
+    DIR* dir2 = opendir("/luma/sysmodules");
+    if (dir && dir2)
     {
         // was copied/pasted from https://github.com/Pirater12/CustomRGBPattern/blob/master/main.c and then edited
         printf("writing IPS patch file...\n");
@@ -291,90 +343,86 @@ void writepatch(LED note)
         FILE *file = fopen("/luma/sysmodules/0004013000003502.ips", "wb+"); //originally /luma/titles/0004013000003502/code.ips
 
         // https://zerosoft.zophar.net/ips.php for documentation of the IPS file format
-        
-        for (int i = 0; i < 2; i++) {
 
-            // HEADER (5 BYTES)
-            fwrite("PATCH", 5, 1, file);
+        // HEADER (5 BYTES)
+        fwrite("PATCH", 5, 1, file);
 
-            // PATCH #1
-            // This patch applies for when the console is in sleep mode (to have the LED holding the color)
+        // PATCH #1
+        // This patch applies for when the console is in sleep mode (to have the LED holding the color)
 
-            // OFFSET (3 BYTES) 0x00A193 real address is 0x10A193
-            fputc(0x00, file);
-            fputc(0xA1, file);
-            fputc(0x93, file);
+       // OFFSET (3 BYTES) 0x00A193 real address is 0x10A193
+        fputc(0x00, file);
+        fputc(0xA1, file);
+        fputc(0x93, file);
 
-            // SIZE (2 BYTES)
-            fputc(0x00, file);
-            fputc(0xC4, file); //  196 BYTES
+        // SIZE (2 BYTES)
+        fputc(0x00, file);
+        fputc(0xC4, file); //  196 BYTES
 
-            // DATA (196 BYTES)
+        // DATA (196 BYTES)
 
-            // 96 BYTES
-            fputc(LOOPBYTE, file);
-            //fwrite(&note, sizeof(note), 1, file);
-            if (staticend == 1 || staticend == 3) {
-                fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
-            } else {
-                fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
-            }
-            // 3 BYTES
-            fputc(ANIMDELAY, file); // 0x50
-            fputc(ANIMSMOOTH, file); // 0x3C
-            fputc(LOOPBYTE, file);
-            // 96 BYTES
-            //fwrite(&note, sizeof(note), 1, file);
-            if (staticend == 1 || staticend == 3) {
-                fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
-            } else {
-                fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
-            }
-
-            // END OF PATCH #1
-
-            // PATCH #2
-            // This patch applies for when the console is awake (to avoid having the LED holding the color)
-
-            // OFFSET (3 BYTES) 0x00A1F7 real address is 0x10A1F7
-            fputc(0x00, file);
-            fputc(0xA1, file);
-            fputc(0xF7, file);
-
-            // SIZE (2 BYTES)
-            fputc(0x00, file);
-            fputc(0xC4, file); //  196 BYTES
-
-            // DATA (196 BYTES)
-
-            // 96 BYTES
-            fputc(LOOPBYTE, file);
-            //fwrite(&note, sizeof(note), 1, file);
-            if (staticend == 2 || staticend == 3) {
-                fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
-            } else {
-                fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
-            }
-            // 3 BYTES
-            fputc(ANIMDELAY, file);
-            fputc(ANIMSMOOTH, file);
-            fputc(LOOPBYTE, file);
-            // 96 BYTES
-            //fwrite(&note, sizeof(note), 1, file);
-            if (staticend == 2 || staticend == 3) {
-                fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
-            } else {
-                fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
-            }
-
-            // EOF MARKER (3 BYTES)
-            fwrite("EOF", 3, 1, file);
-
-            // close file
-            fclose(file);
-            FILE *file = fopen("/luma/titles/0004013000003502/code.ips", "wb+"); // For older luma versions
+        // 96 BYTES
+        fputc(LOOPBYTE, file);
+        //fwrite(&note, sizeof(note), 1, file);
+        if (staticend == 1 || staticend == 3) {
+            fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
+        } else {
+            fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
         }
+        // 3 BYTES
+        fputc(ANIMDELAY, file); // 0x50
+        fputc(ANIMSMOOTH, file); // 0x3C
+        fputc(LOOPBYTE, file);
+        // 96 BYTES
+        //fwrite(&note, sizeof(note), 1, file);
+        if (staticend == 1 || staticend == 3) {
+            fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
+        } else {
+            fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
+        }
+
+        // END OF PATCH #1
+
+        // PATCH #2
+        // This patch applies for when the console is awake (to avoid having the LED holding the color)
+
+        // OFFSET (3 BYTES) 0x00A1F7 real address is 0x10A1F7
+        fputc(0x00, file);
+        fputc(0xA1, file);
+        fputc(0xF7, file);
+
+        // SIZE (2 BYTES)
+        fputc(0x00, file);
+        fputc(0xC4, file); //  196 BYTES
+
+        // DATA (196 BYTES)
+
+        // 96 BYTES
+        fputc(LOOPBYTE, file);
+        //fwrite(&note, sizeof(note), 1, file);
+        if (staticend == 2 || staticend == 3) {
+            fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
+        } else {
+            fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
+        }
+        // 3 BYTES
+        fputc(ANIMDELAY, file);
+        fputc(ANIMSMOOTH, file);
+        fputc(LOOPBYTE, file);
+        // 96 BYTES
+        //fwrite(&note, sizeof(note), 1, file);
+        if (staticend == 2 || staticend == 3) {
+            fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
+        } else {
+            fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
+        }
+
+        // EOF MARKER (3 BYTES)
+        fwrite("EOF", 3, 1, file);
+
+        // close file
         fclose(file);
+        fcopy("/luma/sysmodules/0004013000003502.ips", "/luma/titles/0004013000003502/code.ips"); // For older luma versions
 
         // check if our files were written
         if( access("/luma/sysmodules/0004013000003502.ips", F_OK) != -1 && access("/luma/titles/0004013000003502/code.ips", F_OK) != -1) 
@@ -463,9 +511,13 @@ void PTM_RebootAsync()
 
 void listMenu()
 {
+    int colr; //= (int)strtol(color_HEX.substr(0, 2), NULL, 16);
+    int colg; //= (int)strtol(color_HEX.substr(2, 2), NULL, 16);
+    int colb; //= (int)strtol(color_HEX.substr(4, 2), NULL, 16);
+    intRGB(std::string(color_HEX), &colr, &colg, &colb);
     iprintf("\x1b[2J");
     printf("\x1b[0;0H\x1b[30;0m");
-    printf("===== CtrRGBPAT2 ===== %s\n", debugMode ? "[DEBUG MODE ACTIVATED]" : " ");
+    printf("===== Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 ===== %s\n", debugMode ? "[DEBUG MODE ACTIVATED]" : " ");
     for (int i = 0; i <= CMDS-1; i++) 
     {
         if (i == selected)
@@ -474,25 +526,28 @@ void listMenu()
             printf("\x1b[30;0m* %s\n", menu[i].c_str());
     }
     printf("======================\n");
-   
-    printf("COLOR  : %s\n", color_HEX);
+    printf("COLOR  : %s \e[48;2;%d;%d;%dm  \e[0m\n", color_HEX, colr, colg, colb);
     printf("PATTERN : %s\n", paterns[selectedpat].c_str());
 
     printf("ANIMATION DELAY : %X\n", ANIMDELAY);
     printf("ANIMATION SMOOTHNESS : %X\n", ANIMSMOOTH);
     printf("LOOP DELAY : %X\n", LOOPBYTE);
     printf("STATIC END : %s\n", staticEnds[staticend].c_str());
+    printf("ENABLED : %s\e[0m\n", (enabled ? "\e[32mYES" : "\e[31mNO"));
     printf("======================\n");
 }
 
 int main(int argc, char **argv) 
 {
-    srvInit();
-    aptInit();
     gfxInitDefault();
+    aptInit();
+    aptSetHomeAllowed(false);
+    srvInit();
 	
     // Init console for text output
     consoleInit(GFX_TOP, NULL);
+
+    enabled = (access("/luma/sysmodules/0004013000003502.ips", F_OK) != -1 && access("/luma/titles/0004013000003502/code.ips", F_OK) != -1);
 
     selected = 0;
 
@@ -502,9 +557,18 @@ int main(int argc, char **argv)
     
     while (aptMainLoop()) 
     {
+        gfxSwapBuffers();
+        gfxFlushBuffers();
+		gspWaitForVBlank();
+
         hidScanInput();
 
         u32 kDown = hidKeysDown();
+
+        if (aptCheckHomePressRejected()) {
+            listMenu();
+            printf("Cannot return to the HOME Menu. START to reboot\n");
+        }
 
         if (kDown & KEY_START)
         {
@@ -576,6 +640,8 @@ int main(int argc, char **argv)
                     case 6:
                         LED notification;
                         //createLED(&notification, std::string(color_HEX), staticend, selectedpat);
+                        enabled = true;
+                        listMenu();
                         writepatch(notification);
                     break;
                     case 7:
@@ -584,6 +650,26 @@ int main(int argc, char **argv)
                         test_LED(test_notification, LOOPBYTE);
                     break;
                     case 8:
+                        printf("Toggling state, please wait...\n");
+                        // copyFile code and stuff
+                        mkdir("/CtrRGBPAT2", 0777);
+                        if (enabled) {
+                            fcopy("/luma/titles/0004013000003502/code.ips", "/CtrRGBPAT2/0004013000003502.ips");
+                            remove("/luma/titles/0004013000003502/code.ips");
+                            remove("/luma/sysmodules/0004013000003502.ips");
+                        } else if (access("/CtrRGBPAT2/0004013000003502.ips", F_OK) != -1) {
+                            fcopy("/CtrRGBPAT2/0004013000003502.ips", "/luma/titles/0004013000003502/code.ips");
+                            fcopy("/CtrRGBPAT2/0004013000003502.ips", "/luma/sysmodules/0004013000003502.ips");
+                        } else {
+                            listMenu();
+                            printf("Unable to toggle state\n");
+                            break;
+                        }
+                        enabled = !enabled;
+                        listMenu();
+                        printf("Patch is now %s\n", (enabled ? "enabled" : "disabled"));
+                    break;
+                    case 9:
                         ptmSysmInit();
                         PTMSYSM_ShutdownAsync(0);
                         ptmSysmExit();
@@ -596,14 +682,10 @@ int main(int argc, char **argv)
                 listMenu();
             }
         }
-		
-        gfxFlushBuffers();
-        gfxSwapBuffers();
-		gspWaitForVBlank();
     }
 
-    gfxExit();
-    aptExit();
     srvExit();
+    aptExit();
+    gfxExit();
     return 0;
 }
