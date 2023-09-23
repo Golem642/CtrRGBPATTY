@@ -10,7 +10,7 @@ Everything is simple and made so you cannot possibly screw something up (or else
 - [ ] StreetPass, Friends, and "Low Battery" notifications support
 - [ ] Full editor to allow you to create your own patterns
 - [ ] Save and restore feature
-- [x] Toggle on/off
+- [x] ~~Toggle on/off~~
 - [ ] Proper UI ?
 
 
