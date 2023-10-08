@@ -26,25 +26,39 @@ typedef struct {
 } LED_MCU;
 
 std::string menu[10]={
-    "Set Notification RGB Hex Color",
+    "Set notification RGB hex color",
     "Change pattern for LED",
     "Change animation speed (delay)",
     "Change animation smoothness",
     "Change loop delay",
     "Change static ending",
-    "Install IPS Patch",
     "Test LED with pattern",
+    "Install IPS Patch",
     "Toggle enabled state",
     "Shutdown 3DS"
 };
 
-int selected, CMDS = 10;
+std::string installMenu[5]={
+    "Unknown",
+    "SpotPass",
+    "StreetPass",
+    "Friends ???",
+    "Friends"
+};
 
-std::string paterns[4]={
+int currMenu = 0;
+
+int selected, nbMain = 10;
+int nbInstall = 5;
+int nbCmd = nbMain;
+int nbCustom = 32;
+
+std::string patterns[5]={
     "Blink  ",
     "Explode",
     "Rainbow",
-    "Static "
+    "Static ",
+    "Custom "
 };
 
 std::string staticEnds[4]={
@@ -54,7 +68,7 @@ std::string staticEnds[4]={
     "Both       "
 };
 
-int selectedpat, PATS = 4;
+int selectedpat, PATS = 5;
 
 char keybInput[7] = "";
 
@@ -64,16 +78,25 @@ char color_HEX[] = "2200ff"; // Originally 910b0b
 char anim_speed[] = "2f";
 char anim_smooth[] = "5f";
 char anim_loop_delay[] = "ff";
-char anim_blink_speed[] = "50";
+char anim_blink_speed[] = "00";
 
 int staticend = 1;
-uint8_t ANIMDELAY = 0x2F;
-uint8_t ANIMSMOOTH = 0x5F;
+// DEFAULT 3DS SETTINGS :
+// - ????? : 0x50, 0x50, 0xFF, 0x00 (there are no color settings after wtf is this)
+// - SPOTPASS : 0x50, 0x3C, 0xFF, 0x00
+// - STREETPASS : 0x50, 0x50, 0xFF, 0x00
+// - FRIENDS ??? : 0x68, 0x68, 0xFF, 0x00 (strange friend notification type but different)
+// - FRIENDS : 0x50, 0x3C, 0xFF, 0x00
+// - LOW BATTERY : not found for now :(
+uint8_t ANIMDELAY = 0x2F; // 0x50
+uint8_t ANIMSMOOTH = 0x5F; // 0x3c
 uint8_t LOOPBYTE = 0xFF; // no loop
-uint8_t BLINKSPEED = 0x50;
+uint8_t BLINKSPEED = 0x00; // https://www.3dbrew.org/wiki/MCURTC:SetInfoLEDPattern
 bool enabled;
 
 bool debugMode = false;
+
+LED customLed;
 
 static SwkbdState swkbd;
 static SwkbdStatusData swkbdStatus;
@@ -178,7 +201,7 @@ void createLED(LED* patern, std::string hexCode, bool staticEND, int selcpat)
     if (debugMode) {
         printf("(%d, %d, %d)\n", r, g ,b);
     }
-    printf("writing to RGB struct...\n");
+    printf("Writing to RGB struct...\n");
 
     memset(&patern->r[0], 0, 32);
     memset(&patern->g[0], 0, 32);
@@ -193,6 +216,9 @@ void createLED(LED* patern, std::string hexCode, bool staticEND, int selcpat)
                 memset(&patern->g[i], g, 5); 
                 memset(&patern->b[i], b, 5);
             }
+            patern->r[31] = r;
+            patern->g[31] = g;
+            patern->b[31] = b;
         break;
         case 1: // Explode
             for (int i = 1; i<31; i+=10)
@@ -201,6 +227,9 @@ void createLED(LED* patern, std::string hexCode, bool staticEND, int selcpat)
                 patern->g[i] = g/i;
                 patern->b[i] = b/i;
             }
+            patern->r[31] = r;
+            patern->g[31] = g;
+            patern->b[31] = b;
         break;
         case 2: // Rainbow (AKA MCU bricker lol)
             patern->r[0] = 128;
@@ -234,7 +263,7 @@ void createLED(LED* patern, std::string hexCode, bool staticEND, int selcpat)
             patern->r[28] = 218;
             patern->r[29] = 199;
             patern->r[30] = 177;
-            //patern->r[31] = 153;
+            patern->r[31] = r;
             patern->g[0] = 238;
             patern->g[1] = 248;
             patern->g[2] = 254;
@@ -266,7 +295,7 @@ void createLED(LED* patern, std::string hexCode, bool staticEND, int selcpat)
             patern->g[28] = 161;
             patern->g[29] = 184;
             patern->g[30] = 205;
-            //patern->g[31] = 223;
+            patern->g[31] = g;
             patern->b[0] = 18;
             patern->b[1] = 33;
             patern->b[2] = 51;
@@ -298,30 +327,228 @@ void createLED(LED* patern, std::string hexCode, bool staticEND, int selcpat)
             patern->b[28] = 5;
             patern->b[29] = 1;
             patern->b[30] = 2;
-            //patern->b[31] = 8;
+            patern->b[31] = b;
         break;
         case 3:
-            memset(&patern->r[0], r, 31); 
-            memset(&patern->g[0], g, 31); 
-            memset(&patern->b[0], b, 31);
+            memset(&patern->r[0], r, 32); 
+            memset(&patern->g[0], g, 32); 
+            memset(&patern->b[0], b, 32);
+        break;
+        case 4:
+            for (int i = 0; i < 32; i++) {
+                patern->r[i] = customLed.r[i];
+                patern->g[i] = customLed.g[i];
+                patern->b[i] = customLed.b[i];
+            }
         break;
     }
 
-    if (staticEND)
+    if (!staticEND)
     {
-        patern->r[31] = r;
-        patern->g[31] = g;
-        patern->b[31] = b;
-    } else {
         patern->r[31] = 0;
         patern->g[31] = 0;
         patern->b[31] = 0;
     }
 }
 
-void writepatch(LED note)
+/*
+void restoreConfig(LED_MCU* led) {
+    // Select from the installMenu list
+}
+*/
+
+void writeDefault(FILE* file) {
+    
+    printf("Writing default configuration...\n");
+
+    LED_MCU defaultNotifs[nbInstall];
+
+    LED_MCU temp;
+
+    // Unknown LED
+    temp.ani[0] = 0x50;
+    temp.ani[1] = 0x50;
+    temp.ani[2] = 0xFF;
+    temp.ani[3] = 0x00;
+    for (int i = 0; i<32; i++)
+    {
+        temp.r[i] = 0x00;
+        temp.g[i] = 0x00;
+        temp.b[i] = 0x00;
+    }
+    defaultNotifs[0] = temp;
+
+    // SpotPass LED
+    temp.ani[0] = 0x50;
+    temp.ani[1] = 0x3C;
+    temp.ani[2] = 0xFF;
+    temp.ani[3] = 0x00;
+    for (int i = 0; i<30; i = i + 6)
+    {
+        temp.r[i] = 0x00;
+        temp.r[i+1] = 0x00;
+        temp.r[i+2] = 0x00;
+        temp.r[i+3] = 0x00;
+        temp.r[i+4] = 0x00;
+        temp.r[i+5] = 0x00;
+
+        temp.g[i] = 0x00;
+        temp.g[i+1] = 0x00;
+        temp.g[i+2] = 0x00;
+        temp.g[i+3] = 0x00;
+        temp.g[i+4] = 0x00;
+        temp.g[i+5] = 0x00;
+
+        temp.b[i] = 0x00;
+        temp.b[i+1] = 0xFF;
+        temp.b[i+2] = 0xF0;
+        temp.b[i+3] = 0xDE;
+        temp.b[i+4] = 0xBF;
+        temp.b[i+5] = 0x8C;
+    }
+    temp.r[30] = 0x00;
+    temp.g[30] = 0x00;
+    temp.b[30] = 0x00;
+
+    temp.r[31] = 0x00;
+    temp.g[31] = 0x00;
+    temp.b[31] = 0x66;
+
+    defaultNotifs[1] = temp;
+
+    // StreetPass LED
+    temp.ani[0] = 0x50;
+    temp.ani[1] = 0x50;
+    temp.ani[2] = 0xFF;
+    temp.ani[3] = 0x00;
+    for (int i = 0; i<30; i = i + 6)
+    {
+        for (int j = 0; j < 4; j = j+2) {
+            temp.r[i+j] = 0x00;
+            temp.g[i+j] = 0x00;
+            temp.b[i+j] = 0x00;
+
+            temp.r[i+j+1] = 0x00;
+            temp.g[i+j+1] = 0x80;
+            temp.b[i+j+1] = 0x00;
+        }
+        
+        for (int j = 4; j < 6; j++) {
+            temp.r[i+j] = 0x00;
+            temp.g[i+j] = 0x00;
+            temp.b[i+j] = 0x00;
+        }
+    }
+    temp.r[30] = 0x00;
+    temp.g[30] = 0x00;
+    temp.b[30] = 0x00;
+
+    temp.r[31] = 0x00;
+    temp.g[31] = 0x33;
+    temp.b[31] = 0x00;
+
+    defaultNotifs[2] = temp;
+
+    // Friends ??? LED
+    temp.ani[0] = 0x68;
+    temp.ani[1] = 0x68;
+    temp.ani[2] = 0xFF;
+    temp.ani[3] = 0x00;
+    for (int i = 0; i<24; i = i + 8)
+    {
+        for (int j = 0; j < 6; j = j + 2) {
+            temp.r[i+j] = 0x00;
+            temp.g[i+j] = 0x00;
+            temp.b[i+j] = 0x00;
+
+            temp.r[i+j+1] = 0xA9;
+            temp.g[i+j+1] = 0x24;
+            temp.b[i+j+1] = 0x00;
+        }
+
+        for (int j = 6; j<8; j++) {
+            temp.r[i+j] = 0x00;
+            temp.g[i+j] = 0x00;
+            temp.b[i+j] = 0x00;
+        }
+    }
+    for (int i = 24; i < 32; i++) {
+        temp.r[i] = 0x00;
+        temp.g[i] = 0x00;
+        temp.b[i] = 0x00;
+    }
+
+    defaultNotifs[3] = temp;
+    
+    // Friends LED
+    temp.ani[0] = 0x50;
+    temp.ani[1] = 0x3C;
+    temp.ani[2] = 0xFF;
+    temp.ani[3] = 0x00;
+    
+    for (int i = 0; i < 30; i = i + 3) {
+        temp.r[i] = 0x00;
+        temp.g[i] = 0x00;
+        temp.b[i] = 0x00;
+
+        temp.r[i+1] = 0xA9;
+        temp.g[i+1] = 0x24;
+        temp.b[i+1] = 0x00;
+
+        temp.r[i+2] = 0x7E;
+        temp.g[i+2] = 0x1B;
+        temp.b[i+2] = 0x00;
+    }
+
+    for (int i = 30; i<32; i++) {
+        temp.r[i] = 0x00;
+        temp.g[i] = 0x00;
+        temp.b[i] = 0x00;
+    }
+
+    defaultNotifs[4] = temp;
+
+
+    // https://zerosoft.zophar.net/ips.php for documentation of the IPS file format
+    // HEADER (5 BYTES)
+    fwrite("PATCH", 5, 1, file);
+
+    // OFFSET (3 BYTES)
+    fputc(0x00, file);
+    fputc(0xA0, file);
+    fputc(0xC8, file);
+
+    // SIZE (2 BYTES)
+    fputc(0x03, file);
+    fputc(0xE8, file); //  1000 BYTES
+
+    // PATCH
+    for (int i = 0; i < nbInstall; i++) {
+
+        // DATA (200 BYTES)
+
+        // This part applies for when the console is in sleep mode (to have the LED holding the color)
+        // 100 BYTES
+        fwrite(&defaultNotifs[i], sizeof(defaultNotifs[i]), 1, file);
+
+        // This part applies for when the console is awake (to avoid having the LED holding the color)
+        defaultNotifs[i].r[31] = 0x00;
+        defaultNotifs[i].g[31] = 0x00;
+        defaultNotifs[i].b[31] = 0x00;
+
+        // 100 BYTES
+        fwrite(&defaultNotifs[i], sizeof(defaultNotifs[i]), 1, file);
+
+    }
+    // END OF PATCH
+    // EOF MARKER (3 BYTES)
+    fwrite("EOF", 3, 1, file);
+}
+
+void writepatch(LED note, int selectedType = 0)
 {
-    printf("making directory...\n");
+    printf("Making directory...\n");
+    mkdir("/CtrRGBPAT2", 0777);
     mkdir("/luma", 0777);
     mkdir("/luma/titles", 0777);
     mkdir("/luma/titles/0004013000003502", 0777);
@@ -329,116 +556,108 @@ void writepatch(LED note)
 
     DIR* dir = opendir("/luma/titles/0004013000003502"); // ! CHANGED IN LAST VERSION TO GO TO /luma/sysmodules !
     DIR* dir2 = opendir("/luma/sysmodules");
-    if (dir && dir2)
+    DIR* dir3 = opendir("/CtrRGBPAT2");
+    if (dir && dir2 && dir3)
     {
         // was copied/pasted from https://github.com/Pirater12/CustomRGBPattern/blob/master/main.c and then edited
-        printf("writing IPS patch file...\n");
+        printf("Writing IPS patch file...\n");
 
-        //CUSTOM TEST FUCKING HELL
+        FILE *file;
+        if (!(access("/CtrRGBPAT2/0004013000003502.ips", F_OK) != -1)) {
+            if (debugMode) printf("No file detected. New file\n");
+            file = fopen("/CtrRGBPAT2/0004013000003502.ips", "wb+");
+            writeDefault(file);
+        } else {
+            struct stat stats;
+            if (stat("/CtrRGBPAT2/0004013000003502.ips", &stats) == 0) {
+                if (stats.st_size == 5 + (3 + 2) + 200*nbInstall + 3) { // PATCH + (OFFSET + SIZE) + DATA*NOTIFTYPES + EOF
+                    if (debugMode) printf("Opening file normally\n");
+                    file = fopen("/CtrRGBPAT2/0004013000003502.ips", "wb");
+                } else {
+                    if (debugMode) printf("Old file detected. New file\n");
+                    file = fopen("/CtrRGBPAT2/0004013000003502.ips", "wb+");
+                    writeDefault(file);
+                }
+            } else {
+                if (debugMode) printf("Cannot get file size somehow. New file\n");
+                file = fopen("/CtrRGBPAT2/0004013000003502.ips", "wb+");
+                writeDefault(file);
+            }
+        }
+        
         LED notifAWAKE;
         LED notifSLEEP;
         createLED(&notifAWAKE, std::string(color_HEX), false, selectedpat);
         createLED(&notifSLEEP, std::string(color_HEX), true, selectedpat);
-
-        FILE *file = fopen("/luma/sysmodules/0004013000003502.ips", "wb+"); //originally /luma/titles/0004013000003502/code.ips
-
+        
         // https://zerosoft.zophar.net/ips.php for documentation of the IPS file format
 
-        // HEADER (5 BYTES)
-        fwrite("PATCH", 5, 1, file);
+        // PATCH
 
-        // PATCH #1
-        // This patch applies for when the console is in sleep mode (to have the LED holding the color)
+        // ????? : 0x00A0C8 real address is 0x10A0C8 (it's literally just zeros)
+        // SPOTPASS : 0x00A190 real address is 0x10A190
+        // STREETPASS : 0x00A258 real address is 0x10A258
+        // FRIENDS ??? : 0x00A320 real address is 0x10A320
+        // FRIENDS : 0x00A3E8 real address is 0x10A3E8
+        // LOW BATTERY : not found for now :(
 
-       // OFFSET (3 BYTES) 0x00A193 real address is 0x10A193
-        fputc(0x00, file);
-        fputc(0xA1, file);
-        fputc(0x93, file);
+        // Seek to the correct position in the patch
+        fseek(file, 5 + (3 + 2) + 200*selectedType, 0);
 
-        // SIZE (2 BYTES)
-        fputc(0x00, file);
-        fputc(0xC4, file); //  196 BYTES
+        // DATA (200 BYTES)
 
-        // DATA (196 BYTES)
-
-        // 96 BYTES
-        fputc(LOOPBYTE, file);
-        //fwrite(&note, sizeof(note), 1, file);
-        if (staticend == 1 || staticend == 3) {
-            fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
-        } else {
-            fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
-        }
-        // 3 BYTES
-        fputc(ANIMDELAY, file); // 0x50
-        fputc(ANIMSMOOTH, file); // 0x3C
-        fputc(LOOPBYTE, file);
-        // 96 BYTES
-        //fwrite(&note, sizeof(note), 1, file);
-        if (staticend == 1 || staticend == 3) {
-            fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
-        } else {
-            fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
-        }
-
-        // END OF PATCH #1
-
-        // PATCH #2
-        // This patch applies for when the console is awake (to avoid having the LED holding the color)
-
-        // OFFSET (3 BYTES) 0x00A1F7 real address is 0x10A1F7
-        fputc(0x00, file);
-        fputc(0xA1, file);
-        fputc(0xF7, file);
-
-        // SIZE (2 BYTES)
-        fputc(0x00, file);
-        fputc(0xC4, file); //  196 BYTES
-
-        // DATA (196 BYTES)
-
-        // 96 BYTES
-        fputc(LOOPBYTE, file);
-        //fwrite(&note, sizeof(note), 1, file);
-        if (staticend == 2 || staticend == 3) {
-            fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
-        } else {
-            fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
-        }
-        // 3 BYTES
+        // This part applies for when the console is in sleep mode (to have the LED holding the color)
+        // 4 BYTES
         fputc(ANIMDELAY, file);
         fputc(ANIMSMOOTH, file);
         fputc(LOOPBYTE, file);
+        fputc(BLINKSPEED, file);
         // 96 BYTES
-        //fwrite(&note, sizeof(note), 1, file);
+        if (staticend == 1 || staticend == 3) {
+            fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
+        } else {
+            fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
+        }
+
+        // This part applies for when the console is awake (to avoid having the LED holding the color)
+        // 4 BYTES
+        fputc(ANIMDELAY, file);
+        fputc(ANIMSMOOTH, file);
+        fputc(LOOPBYTE, file);
+        fputc(BLINKSPEED, file);
+        // 96 BYTES
         if (staticend == 2 || staticend == 3) {
             fwrite(&notifSLEEP, sizeof(notifSLEEP), 1, file);
         } else {
             fwrite(&notifAWAKE, sizeof(notifAWAKE), 1, file);
         }
 
-        // EOF MARKER (3 BYTES)
-        fwrite("EOF", 3, 1, file);
+        // END OF PATCH
 
         // close file
         fclose(file);
-        fcopy("/luma/sysmodules/0004013000003502.ips", "/luma/titles/0004013000003502/code.ips"); // For older luma versions
 
-        // check if our files were written
+        // Copy files to activate the patch
+        fcopy("/CtrRGBPAT2/0004013000003502.ips", "/luma/titles/0004013000003502/code.ips");
+        fcopy("/CtrRGBPAT2/0004013000003502.ips", "/luma/sysmodules/0004013000003502.ips");
+
+        // Check if our files were written
         if( access("/luma/sysmodules/0004013000003502.ips", F_OK) != -1 && access("/luma/titles/0004013000003502/code.ips", F_OK) != -1) 
         {
-            printf("success!\n");
+            printf("Success !\n");
         } 
         else 
         {
-            printf("failed!\n");
+            printf("Failed !\n");
         }
 
         closedir(dir);
+        closedir(dir2);
+        closedir(dir3);
     }
     else if (ENOENT == errno)
     {
-        printf("directory failed...\n");
+        printf("Directory failed...\n");
     }
 }
 
@@ -449,7 +668,7 @@ void ptmsysmSetInfoLedPattern(LED_MCU pattern)
     Result result = srvGetServiceHandle(&serviceHandle, "ptm:sysm");
     if (result != 0) 
     {
-        printf("failed to get service ptm:sysm :(");
+        printf("Failed to get service ptm:sysm :(\n");
         return;
     }
 
@@ -460,15 +679,11 @@ void ptmsysmSetInfoLedPattern(LED_MCU pattern)
     svcCloseHandle(serviceHandle);
 }
 
-void test_LED(LED patern, uint8_t lp)
+void test_LED(LED patern)
 {
     LED_MCU MCU_PAT;
 
-    if (debugMode) {
-        printf("last color = (%u, %u, %u)\n", patern.r[31], patern.g[31], patern.b[31]);
-    }
-
-    for (int i = 0; i<=31; i++)
+    for (int i = 0; i<32; i++)
     {
         MCU_PAT.r[i] = patern.r[i];
         MCU_PAT.g[i] = patern.g[i];
@@ -478,10 +693,17 @@ void test_LED(LED patern, uint8_t lp)
         }
     }
 
+    if (debugMode) {
+        printf("First color = (%u, %u, %u)\n", patern.r[0], patern.g[0], patern.b[0]);
+        printf("Last color = (%u, %u, %u)\n", patern.r[31], patern.g[31], patern.b[31]);
+    }
+
     MCU_PAT.ani[0] = ANIMDELAY;
     MCU_PAT.ani[1] = ANIMSMOOTH;
-    MCU_PAT.ani[2] = lp;
-    MCU_PAT.ani[3] = 0;
+    MCU_PAT.ani[2] = LOOPBYTE;
+    MCU_PAT.ani[3] = BLINKSPEED;
+
+    printf("Testing custom pattern...\n");
 
     ptmsysmSetInfoLedPattern(MCU_PAT);
 }
@@ -509,7 +731,7 @@ void PTM_RebootAsync()
     ptmSysmExit();
 }
 
-void listMenu()
+void listMenu(int dispOffset)
 {
     int colr; //= (int)strtol(color_HEX.substr(0, 2), NULL, 16);
     int colg; //= (int)strtol(color_HEX.substr(2, 2), NULL, 16);
@@ -518,23 +740,56 @@ void listMenu()
     iprintf("\x1b[2J");
     printf("\x1b[0;0H\x1b[30;0m");
     printf("===== Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 ===== %s\n", debugMode ? "[DEBUG MODE ACTIVATED]" : " ");
-    for (int i = 0; i <= CMDS-1; i++) 
-    {
-        if (i == selected)
-            printf("\x1b[47;30m* %s\x1b[30;0m\n", menu[i].c_str());
-        else
-            printf("\x1b[30;0m* %s\n", menu[i].c_str());
+    switch (currMenu) {
+        case 0:
+            for (int i = 0; i < nbMain; i++) 
+            {
+                if (i == 0 && selectedpat == 4) {
+                    if (selected == 0)
+                        printf("\x1b[30;43m* Set custom notification pattern\x1b[30;0m\n");
+                    else
+                        printf("\x1b[33;0m* Set custom notification pattern\x1b[30;0m\n");
+                } else {
+                    if (i == selected)
+                        printf("\x1b[47;30m* %s\x1b[30;0m\n", menu[i].c_str());
+                    else
+                        printf("\x1b[30;0m* %s\n", menu[i].c_str());
+                }
+            }
+            printf("======================\n");
+            printf("COLOR  : %s \e[48;2;%d;%d;%dm  \e[0m\n", color_HEX, colr, colg, colb);
+            printf("PATTERN : %s\n", patterns[selectedpat].c_str());
+            printf("ANIMATION DELAY : %X\n", ANIMDELAY);
+            printf("ANIMATION SMOOTHNESS : %X\n", ANIMSMOOTH);
+            printf("LOOP DELAY : %X\n", LOOPBYTE);
+            printf("STATIC END : %s\n", staticEnds[staticend].c_str());
+            printf("ENABLED : %s\e[0m\n", (enabled ? "\e[32mYES" : "\e[31mNO"));
+            printf("======================\n");
+        break;
+        case 1:
+            printf("Select where to install the custom pattern :\n");
+            for (int i = 0; i < nbInstall; i++) 
+            {
+                if (i == selected)
+                    printf("\x1b[47;30m* %s\x1b[30;0m\n", installMenu[i].c_str());
+                else
+                    printf("\x1b[30;0m* %s\n", installMenu[i].c_str());
+            }
+            printf("======================\n");
+            printf("(B) to cancel\n");
+        break;
+        case 2:
+            for (int i = dispOffset; i < dispOffset+28; i++) {
+                if (i == selected)
+                    printf("\x1b[47;30m%d: %s%X%s%X%s%X %s\x1b[30;0m\n", i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
+                else
+                    printf("\x1b[30;0m%d: %s%X%s%X%s%X %s\n", i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
+            }
+        break;
+        default:
+            printf("err\n");
+        break;
     }
-    printf("======================\n");
-    printf("COLOR  : %s \e[48;2;%d;%d;%dm  \e[0m\n", color_HEX, colr, colg, colb);
-    printf("PATTERN : %s\n", paterns[selectedpat].c_str());
-
-    printf("ANIMATION DELAY : %X\n", ANIMDELAY);
-    printf("ANIMATION SMOOTHNESS : %X\n", ANIMSMOOTH);
-    printf("LOOP DELAY : %X\n", LOOPBYTE);
-    printf("STATIC END : %s\n", staticEnds[staticend].c_str());
-    printf("ENABLED : %s\e[0m\n", (enabled ? "\e[32mYES" : "\e[31mNO"));
-    printf("======================\n");
 }
 
 int main(int argc, char **argv) 
@@ -547,14 +802,21 @@ int main(int argc, char **argv)
     // Init console for text output
     consoleInit(GFX_TOP, NULL);
 
+    for (int i = 0; i < 32; i++) {
+        customLed.r[i] = 0x00;
+        customLed.g[i] = 0x00;
+        customLed.b[i] = 0x00;
+    }
+
     enabled = (access("/luma/sysmodules/0004013000003502.ips", F_OK) != -1 && access("/luma/titles/0004013000003502/code.ips", F_OK) != -1);
 
     selected = 0;
+    int selOffset = 0;
 
     bool infoRead = false;  
-    printf("Welcome to CtrRGBPAT2 !\n\nThis is a tool allowing you to change the color\nand pattern of the LED when you receive\na notification.\n\nAs of now it only works for basic notifications,\nnot streepasses nor friend notifications.\nThis is planned for the future.\n\nThis is not the final version, i will include more\nthings in future updates.\n\n\nPress (A) to continue\n");
+    printf("Welcome to Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 !\n\nThis is a tool allowing you to change the color\nand pattern of the LED when you receive\na notification.\n\nYou can select for which type of notifications\nyou want it to apply from the install menu.\n\nThis is not the final version, i will include more\nthings in future updates.\n\n\nPress (A) to continue\n");
     //listMenu();
-    
+
     while (aptMainLoop()) 
     {
         gfxSwapBuffers();
@@ -566,7 +828,8 @@ int main(int argc, char **argv)
         u32 kDown = hidKeysDown();
 
         if (aptCheckHomePressRejected()) {
-            listMenu();
+            infoRead = true;
+            listMenu(selOffset);
             printf("Cannot return to the HOME Menu. START to reboot\n");
         }
 
@@ -579,107 +842,187 @@ int main(int argc, char **argv)
 
         if (kDown & KEY_Y) {
             debugMode = !debugMode;
-            listMenu();
+            infoRead = true;
+            listMenu(selOffset);
         }
 
-       if (kDown & KEY_DDOWN)
+        if ((kDown & KEY_X) && debugMode) {
+            if (access("/CtrRGBPAT2/0004013000003502.ips", F_OK) != -1) {
+                FILE *file = fopen("/CtrRGBPAT2/0004013000003502.ips", "wb+");
+                writeDefault(file);
+                fclose(file);
+                listMenu(selOffset);
+                printf("Configuration restored to default\n");
+            } else {
+                listMenu(selOffset);
+                printf("No previous configuration detected\n");
+            }
+        }
+
+        if (kDown & KEY_DDOWN)
         {
             selected=selected+1;
-            if (selected>CMDS-1)
+            if (selected-selOffset > 27)
+                selOffset = selOffset+1;
+            if (selected>nbCmd-1) {
                 selected = 0;
-            listMenu();
+                selOffset = 0;
+            }
+            infoRead = true;
+            listMenu(selOffset);
         }
 
         if (kDown & KEY_DUP)
         {
             selected=selected-1;
-            if (selected<0)
-                selected = CMDS-1;
-            listMenu();
+            if (selected-selOffset < 0)
+                selOffset = selOffset-1;
+            if (selected<0) {
+                selected = nbCmd-1;
+                selOffset = nbCmd-28;
+            }
+            infoRead = true;
+            listMenu(selOffset);
+        }
+
+        if (kDown & KEY_B) {
+            currMenu = 0;
+            nbCmd = nbMain;
+            selected = 0;
+            selOffset = 0;
+            infoRead = true;
+            listMenu(selOffset);
         }
 
         if (kDown & KEY_A)
         {
             if (infoRead) {
-                switch(selected)
-                {
+                switch(currMenu) {
                     case 0:
-                        hexaInput((char *)color_HEX, 6, "LED RGB color (in HEX)");
-                        listMenu();
-                        if (debugMode) {
-                            for (int i = 0; i < 6; i++) {
-                                printf("Char %d is %d\n", i, (int)keybInput[i]);
-                            }
+                        switch(selected)
+                        {
+                            case 0:
+                                if (selectedpat == 4) {
+                                    currMenu = 2;
+                                    nbCmd = nbCustom;
+                                    selected = 0;
+                                    selOffset = 0;
+                                    listMenu(selOffset);
+                                } else {
+                                    hexaInput((char *)color_HEX, 6, "LED RGB color (in HEX)");
+                                    listMenu(selOffset);
+                                    if (debugMode) {
+                                        for (int i = 0; i < 6; i++) {
+                                            printf("Char %d is %d\n", i, (int)keybInput[i]);
+                                        }
+                                    }
+                                }
+                            break;
+                            case 1:
+                                selectedpat=selectedpat+1;
+                                if (selectedpat>PATS-1)
+                                    selectedpat = 0;
+                                listMenu(selOffset);
+                            break;
+                            case 2:
+                                hexaInput((char *)anim_speed, 2, "Animation speed (delay)");
+                                ANIMDELAY = (uint8_t)strtol(anim_speed, NULL, 16);
+                                listMenu(selOffset);
+                            break;
+                            case 3:
+                                hexaInput((char *)anim_smooth, 2, "Animation smoothness");
+                                ANIMSMOOTH = (uint8_t)strtol(anim_smooth, NULL, 16);
+                                listMenu(selOffset);
+                            break;
+                            case 4:
+                                hexaInput((char *)anim_loop_delay, 2, "Animation loop delay");
+                                LOOPBYTE = (uint8_t)strtol(anim_loop_delay, NULL, 16);
+                                listMenu(selOffset);
+                            break;
+                            case 5:
+                                staticend = (staticend + 1) % 4;
+                                listMenu(selOffset);
+                            break;
+                            case 6:
+                                LED test_notification;
+                                listMenu(selOffset);
+                                createLED(&test_notification, std::string(color_HEX), (staticend > 1), selectedpat);
+                                test_LED(test_notification);
+                            break;
+                            case 7:
+                                //LED notification;
+                                //createLED(&notification, std::string(color_HEX), staticend, selectedpat);
+                                //enabled = true;
+                                currMenu = 1;
+                                nbCmd = nbInstall;
+                                selected = 0;
+                                selOffset = 0;
+                                listMenu(selOffset);
+                                //writepatch(notification);
+                            break;
+                            case 8:
+                                printf("Toggling state, please wait...\n");
+                                // copyFile code and stuff
+                                mkdir("/CtrRGBPAT2", 0777);
+                                if (enabled) {
+                                    remove("/luma/titles/0004013000003502/code.ips");
+                                    remove("/luma/sysmodules/0004013000003502.ips");
+                                } else if (access("/CtrRGBPAT2/0004013000003502.ips", F_OK) != -1) {
+                                    fcopy("/CtrRGBPAT2/0004013000003502.ips", "/luma/titles/0004013000003502/code.ips");
+                                    fcopy("/CtrRGBPAT2/0004013000003502.ips", "/luma/sysmodules/0004013000003502.ips");
+                                } else {
+                                    selected = 7;
+                                    listMenu(selOffset);
+                                    printf("Unable to toggle state. Write IPS patch first\n");
+                                    break;
+                                }
+                                enabled = !enabled;
+                                listMenu(selOffset);
+                                printf("Patch is now %s\n", (enabled ? "enabled" : "disabled"));
+                            break;
+                            case 9:
+                                ptmSysmInit();
+                                PTMSYSM_ShutdownAsync(0);
+                                ptmSysmExit();
+                            break;
+                            default:
+                                printf("err\n");
+                            break;
                         }
                     break;
                     case 1:
-                        selectedpat=selectedpat+1;
-                        if (selectedpat>PATS-1)
-                            selectedpat = 0;
-                        listMenu();
-                    break;
-                    case 2:
-                        hexaInput((char *)anim_speed, 2, "Animation speed (delay)");
-                        ANIMDELAY = (uint8_t)strtol(anim_speed, NULL, 16);
-                        listMenu();
-                    break;
-                    case 3:
-                        hexaInput((char *)anim_smooth, 2, "Animation smoothness");
-                        ANIMSMOOTH = (uint8_t)strtol(anim_smooth, NULL, 16);
-                        listMenu();
-                    break;
-                    case 4:
-                        hexaInput((char *)anim_loop_delay, 2, "Animation loop delay");
-                        LOOPBYTE = (uint8_t)strtol(anim_loop_delay, NULL, 16);
-                        listMenu();
-                    break;
-                    case 5:
-                        staticend = (staticend + 1) % 4;
-                        listMenu();
-                    break;
-                    case 6:
                         LED notification;
                         //createLED(&notification, std::string(color_HEX), staticend, selectedpat);
                         enabled = true;
-                        listMenu();
-                        writepatch(notification);
+                        currMenu = 0;
+                        nbCmd = nbMain;
+                        listMenu(selOffset);
+                        writepatch(notification, selected);
                     break;
-                    case 7:
-                        LED test_notification;
-                        createLED(&test_notification, std::string(color_HEX), (staticend > 1), selectedpat);
-                        test_LED(test_notification, LOOPBYTE);
+                    case 2:
+                    {
+                        char hexCustom[10];
+                        int r, g, b;
+                        r = customLed.r[selected];
+                        g = customLed.g[selected];
+                        b = customLed.b[selected];
+                        sprintf((char *)hexCustom, "%s%X%s%X%s%X", (customLed.r[selected] < 16 ? "0" : ""), customLed.r[selected], (customLed.g[selected] < 16 ? "0" : ""), customLed.g[selected], (customLed.b[selected] < 16 ? "0" : ""), customLed.b[selected]);
+                        hexaInput((char *)hexCustom, 6, "LED RGB color (in HEX)");
+                        intRGB(std::string(hexCustom), &r, &g, &b);
+                        customLed.r[selected] = r;
+                        customLed.g[selected] = g;
+                        customLed.b[selected] = b;
+                        listMenu(selOffset);
                     break;
-                    case 8:
-                        printf("Toggling state, please wait...\n");
-                        // copyFile code and stuff
-                        mkdir("/CtrRGBPAT2", 0777);
-                        if (enabled) {
-                            fcopy("/luma/titles/0004013000003502/code.ips", "/CtrRGBPAT2/0004013000003502.ips");
-                            remove("/luma/titles/0004013000003502/code.ips");
-                            remove("/luma/sysmodules/0004013000003502.ips");
-                        } else if (access("/CtrRGBPAT2/0004013000003502.ips", F_OK) != -1) {
-                            fcopy("/CtrRGBPAT2/0004013000003502.ips", "/luma/titles/0004013000003502/code.ips");
-                            fcopy("/CtrRGBPAT2/0004013000003502.ips", "/luma/sysmodules/0004013000003502.ips");
-                        } else {
-                            listMenu();
-                            printf("Unable to toggle state\n");
-                            break;
-                        }
-                        enabled = !enabled;
-                        listMenu();
-                        printf("Patch is now %s\n", (enabled ? "enabled" : "disabled"));
-                    break;
-                    case 9:
-                        ptmSysmInit();
-                        PTMSYSM_ShutdownAsync(0);
-                        ptmSysmExit();
-                    break;
+                    }
                     default:
                         printf("err\n");
+                    break;
                 }
+                
             } else {
                 infoRead = true;
-                listMenu();
+                listMenu(selOffset);
             }
         }
     }
