@@ -7,8 +7,9 @@ Customize the LED color and pattern for when you receive SpotPass notifications 
 Everything is simple and made so you cannot possibly screw something up (or else you really wanted to)
 
 ## Upcoming
-- [ ] StreetPass, Friends, and "Low Battery" notifications support
-- [ ] Full editor to allow you to create your own patterns
+- [x] StreetPass and Friends notification support (+ two unknown/unused? notification types)
+- [ ] "Low Battery" notifications support
+- [x] Full editor to allow you to create your own patterns (will add more later)
 - [ ] Save and restore feature
 - [x] ~~Toggle on/off~~
 - [ ] Proper UI ?
