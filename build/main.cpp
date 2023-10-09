@@ -74,6 +74,7 @@ char keybInput[7] = "";
 
 // defaults
 char color_HEX[] = "2200ff"; // Originally 910b0b
+char color_copy[10] = "000000"; // 10 to avoid gcc compiling warnings
 
 char anim_speed[] = "2f";
 char anim_smooth[] = "5f";
@@ -572,7 +573,7 @@ void writepatch(LED note, int selectedType = 0)
             if (stat("/CtrRGBPAT2/0004013000003502.ips", &stats) == 0) {
                 if (stats.st_size == 5 + (3 + 2) + 200*nbInstall + 3) { // PATCH + (OFFSET + SIZE) + DATA*NOTIFTYPES + EOF
                     if (debugMode) printf("Opening file normally\n");
-                    file = fopen("/CtrRGBPAT2/0004013000003502.ips", "wb");
+                    file = fopen("/CtrRGBPAT2/0004013000003502.ips", "rb+");
                 } else {
                     if (debugMode) printf("Old file detected. New file\n");
                     file = fopen("/CtrRGBPAT2/0004013000003502.ips", "wb+");
@@ -746,9 +747,9 @@ void listMenu(int dispOffset)
             {
                 if (i == 0 && selectedpat == 4) {
                     if (selected == 0)
-                        printf("\x1b[30;43m* Set custom notification pattern\x1b[30;0m\n");
+                        printf("\x1b[47;30m* Set custom notification pattern\x1b[30;0m\n");
                     else
-                        printf("\x1b[33;0m* Set custom notification pattern\x1b[30;0m\n");
+                        printf("\x1b[40;33m* Set custom notification pattern\x1b[30;0m\n");
                 } else {
                     if (i == selected)
                         printf("\x1b[47;30m* %s\x1b[30;0m\n", menu[i].c_str());
@@ -779,11 +780,12 @@ void listMenu(int dispOffset)
             printf("(B) to cancel\n");
         break;
         case 2:
-            for (int i = dispOffset; i < dispOffset+28; i++) {
+            printf("\e[40;36m(L) to copy, (R) to paste : \e[0m%s\n", color_copy);
+            for (int i = dispOffset; i < dispOffset+27; i++) {
                 if (i == selected)
-                    printf("\x1b[47;30m%d: %s%X%s%X%s%X %s\x1b[30;0m\n", i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
+                    printf("\x1b[47;30m%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\x1b[30;0m\n", i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
                 else
-                    printf("\x1b[30;0m%d: %s%X%s%X%s%X %s\n", i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
+                    printf("\x1b[37;40m%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\n", i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
             }
         break;
         default:
@@ -791,6 +793,9 @@ void listMenu(int dispOffset)
         break;
     }
 }
+
+// 32: 000000   (may be 0 depending on static ending)
+// This is not the final version, i will include more
 
 int main(int argc, char **argv) 
 {
@@ -801,6 +806,8 @@ int main(int argc, char **argv)
 	
     // Init console for text output
     consoleInit(GFX_TOP, NULL);
+    
+    int r, g, b;
 
     for (int i = 0; i < 32; i++) {
         customLed.r[i] = 0x00;
@@ -862,7 +869,7 @@ int main(int argc, char **argv)
         if (kDown & KEY_DDOWN)
         {
             selected=selected+1;
-            if (selected-selOffset > 27)
+            if (selected-selOffset > 26)
                 selOffset = selOffset+1;
             if (selected>nbCmd-1) {
                 selected = 0;
@@ -879,9 +886,22 @@ int main(int argc, char **argv)
                 selOffset = selOffset-1;
             if (selected<0) {
                 selected = nbCmd-1;
-                selOffset = nbCmd-28;
+                selOffset = nbCmd-27;
             }
             infoRead = true;
+            listMenu(selOffset);
+        }
+
+        if ((kDown & KEY_L) && currMenu == 2) {
+            sprintf((char *)color_copy, "%s%X%s%X%s%X", (customLed.r[selected] < 16 ? "0" : ""), customLed.r[selected], (customLed.g[selected] < 16 ? "0" : ""), customLed.g[selected], (customLed.b[selected] < 16 ? "0" : ""), customLed.b[selected]);
+            listMenu(selOffset);
+        }
+
+        if ((kDown & KEY_R) && currMenu == 2) {
+            intRGB(std::string(color_copy), &r, &g, &b);
+            customLed.r[selected] = r;
+            customLed.g[selected] = g;
+            customLed.b[selected] = b;
             listMenu(selOffset);
         }
 
@@ -1001,8 +1021,7 @@ int main(int argc, char **argv)
                     break;
                     case 2:
                     {
-                        char hexCustom[10];
-                        int r, g, b;
+                        char hexCustom[10]; // 10 to avoid gcc compiling warnings
                         r = customLed.r[selected];
                         g = customLed.g[selected];
                         b = customLed.b[selected];
