@@ -3,13 +3,15 @@ This 3DS application allows the LED color to be changed. In order for this to wo
 Thanks to [CPunch](https://github.com/CPunch/CtrRGBPATTY/) for the original project !
 
 ## Features
-Customize the LED color and pattern for when you receive SpotPass notifications ! Why keep the default blue when you can have a cool-looking purple 😎
+Customize the LED color and pattern for when you receive notifications ! Why keep the default blue when you can have a cool-looking purple for example 😎
+You can customize the LED for every type of notification (there are more than you think...)
 Everything is simple and made so you cannot possibly screw something up (or else you really wanted to)
 
 ## Upcoming
-- [x] StreetPass and Friends notification support (+ two unknown/unused? notification types)
+- [x] ~~StreetPass and Friends notification support (+ two unknown/unused? notification types)~~
 - [ ] "Low Battery" notifications support
-- [x] Full editor to allow you to create your own patterns (will add more later)
+- [x] ~~Full editor to allow you to create your own patterns (might add more later)~~
+- [ ] Instant preview when selecting a color
 - [ ] Save and restore feature
 - [x] ~~Toggle on/off~~
 - [ ] Proper UI ?
