@@ -18,7 +18,7 @@ Everything is simple and made so you cannot possibly screw something up (or else
 - Q : My console crashes on boot after the patch !
  - A : Delete the files at `/luma/sysmodules/0004013000003502.ips` and `/luma/titles/0004013000003502/code.ips` and try again. Do not use the app, send a GitHub issue in this repo, and wait for the next release where there will be a fix 
 
-- Q : When will <insert feature> will be available ?
+- Q : When will \[insert feature\] will be available ?
  - A : This project is mainly for fun and training, so i will implement features when i feel like it
 
 # Building
