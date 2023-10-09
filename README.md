@@ -14,6 +14,12 @@ Everything is simple and made so you cannot possibly screw something up (or else
 - [x] ~~Toggle on/off~~
 - [ ] Proper UI ?
 
+# QnA
+- Q : My console crashes on boot after the patch !
+ - A : Delete the files at `/luma/sysmodules/0004013000003502.ips` and `/luma/titles/0004013000003502/code.ips` and try again. Do not use the app, send a GitHub issue in this repo, and wait for the next release where there will be a fix 
+
+- Q : When will <insert feature> will be available ?
+ - A : This project is mainly for fun and training, so i will implement features when i feel like it
 
 # Building
 After some researches i determined that this is made for devkitpro for Windows. I don't know how CPunch managed to make this work but i had to make a lot of changes. 
