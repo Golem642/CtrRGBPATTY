@@ -23,6 +23,9 @@ Everything is simple and made so you cannot possibly screw something up (or else
 - Q : When will \[insert feature\] will be available ?
  - A : This project is mainly for fun and training, so i will implement features when i feel like it
 
+- Q : What does the two unknown patterns do ?
+ - A : I found out that the "Unknown" patterns triggers when your console boots or exits sleep mode, it can make up for some pretty cool transitions for when you open the lid. As for the second friend notification type, it's probably for when someone plays a game you can join using the friend list, still unsure thought.
+
 # Building
 After some researches i determined that this is made for devkitpro for Windows. I don't know how CPunch managed to make this work but i had to make a lot of changes. 
 The compilation process is very weird but i didn't want to change anything to avoid breaking the currently "working" setup. 
