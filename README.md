@@ -17,13 +17,13 @@ Everything is simple and made so you cannot possibly screw something up (or else
 - [ ] Proper UI ?
 
 # QnA
-- Q : My console crashes on boot after the patch !
+**Q : My console crashes on boot after the patch !**
  - A : Delete the files at `/luma/sysmodules/0004013000003502.ips` and `/luma/titles/0004013000003502/code.ips` and try again. Do not use the app, send a GitHub issue in this repo, and wait for the next release where there will be a fix 
 
-- Q : When will \[insert feature\] will be available ?
+**Q : When will \[insert feature\] will be available ?**
  - A : This project is mainly for fun and training, so i will implement features when i feel like it
 
-- Q : What does the two unknown patterns do ?
+**Q : What does the two unknown patterns do ?**
  - A : I found out that the "Unknown" patterns triggers when your console boots or exits sleep mode, it can make up for some pretty cool transitions for when you open the lid. As for the second friend notification type, it's probably for when someone plays a game you can join using the friend list, still unsure thought.
 
 # Building
