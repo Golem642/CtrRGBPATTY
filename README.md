@@ -11,6 +11,7 @@ Everything is simple and made so you cannot possibly screw something up (or else
 - [x] ~~StreetPass and Friends notification support (+ two unknown/unused? notification types)~~
 - [ ] "Low Battery" notifications support
 - [x] ~~Full editor to allow you to create your own patterns (might add more later)~~
+- [ ] Separate settings for Sleeping/Awake
 - [ ] Instant preview when selecting a color
 - [ ] Save and restore feature
 - [x] ~~Toggle on/off~~
