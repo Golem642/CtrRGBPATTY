@@ -10,6 +10,8 @@
 #include <dirent.h>
 #include <unistd.h>
 
+// TODO: Save/restore, Reset only one LED to default, Find how to change the "low battery" notification, Instant preview ?, Proper UI ?
+
 typedef struct {
     uint8_t r[32];
     uint8_t g[32];
@@ -39,11 +41,11 @@ std::string menu[10]={
 };
 
 std::string installMenu[5]={
-    "Unknown",
+    "Sleep exit",
     "SpotPass",
     "StreetPass",
-    "Friends ???",
-    "Friends"
+    "Join friend game ???",
+    "Friend online"
 };
 
 int currMenu = 0;
@@ -83,10 +85,10 @@ char anim_blink_speed[] = "00";
 
 int staticend = 1;
 // DEFAULT 3DS SETTINGS :
-// - ????? : 0x50, 0x50, 0xFF, 0x00 (there are no color settings after wtf is this)
+// - SLEEP EXIT : 0x50, 0x50, 0xFF, 0x00
 // - SPOTPASS : 0x50, 0x3C, 0xFF, 0x00
 // - STREETPASS : 0x50, 0x50, 0xFF, 0x00
-// - FRIENDS ??? : 0x68, 0x68, 0xFF, 0x00 (strange friend notification type but different)
+// - JOIN FRIEND GAME ??? : 0x68, 0x68, 0xFF, 0x00 (strange friend notification type but different)
 // - FRIENDS : 0x50, 0x3C, 0xFF, 0x00
 // - LOW BATTERY : not found for now :(
 uint8_t ANIMDELAY = 0x2F; // 0x50
@@ -366,7 +368,7 @@ void writeDefault(FILE* file) {
 
     LED_MCU temp;
 
-    // Unknown LED
+    // Sleep exit LED
     temp.ani[0] = 0x50;
     temp.ani[1] = 0x50;
     temp.ani[2] = 0xFF;
@@ -450,7 +452,7 @@ void writeDefault(FILE* file) {
 
     defaultNotifs[2] = temp;
 
-    // Friends ??? LED
+    // Join friend game ??? LED
     temp.ani[0] = 0x68;
     temp.ani[1] = 0x68;
     temp.ani[2] = 0xFF;
@@ -595,10 +597,10 @@ void writepatch(LED note, int selectedType = 0)
 
         // PATCH
 
-        // ????? : 0x00A0C8 real address is 0x10A0C8 (it's literally just zeros)
+        // SLEEP EXIT : 0x00A0C8 real address is 0x10A0C8
         // SPOTPASS : 0x00A190 real address is 0x10A190
         // STREETPASS : 0x00A258 real address is 0x10A258
-        // FRIENDS ??? : 0x00A320 real address is 0x10A320
+        // JOIN FRIEND GAME ??? : 0x00A320 real address is 0x10A320
         // FRIENDS : 0x00A3E8 real address is 0x10A3E8
         // LOW BATTERY : not found for now :(
 
@@ -783,9 +785,9 @@ void listMenu(int dispOffset)
             printf("\e[40;36m(L) to copy, (R) to paste : \e[0m%s\n", color_copy);
             for (int i = dispOffset; i < dispOffset+27; i++) {
                 if (i == selected)
-                    printf("\x1b[47;30m%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\x1b[30;0m\n", i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
+                    printf("\x1b[47;30m%s%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\x1b[30;0m\n", (i < 10 ? "0" : ""), i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
                 else
-                    printf("\x1b[37;40m%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\n", i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
+                    printf("\x1b[37;40m%s%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\n", (i < 10 ? "0" : ""), i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
             }
         break;
         default:
@@ -800,9 +802,7 @@ void listMenu(int dispOffset)
 int main(int argc, char **argv) 
 {
     gfxInitDefault();
-    aptInit();
     aptSetHomeAllowed(false);
-    srvInit();
 	
     // Init console for text output
     consoleInit(GFX_TOP, NULL);
@@ -821,15 +821,11 @@ int main(int argc, char **argv)
     int selOffset = 0;
 
     bool infoRead = false;  
-    printf("Welcome to Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 !\n\nThis is a tool allowing you to change the color\nand pattern of the LED when you receive\na notification.\n\nYou can select for which type of notifications\nyou want it to apply from the install menu.\n\nThis is not the final version, i will include more\nthings in future updates.\n\n\nPress (A) to continue\n");
+    printf("Welcome to Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 !\n\nThis is a tool allowing you to change the color\nand pattern of the LED when you receive\na notification.\n\nYou can select for which type of notifications\nyou want it to apply from the install menu.\n\nThis is not the final version, i will include\nmore things in future updates.\n\n\nControls :\n- Arrow UP and DOWN to move,\n- (A) to confirm/toggle\n- (B) to go back to the main menu\n- START to reboot\n\n\e[32mPress (A) to continue\e[0m\n");
     //listMenu();
 
     while (aptMainLoop()) 
     {
-        gfxSwapBuffers();
-        gfxFlushBuffers();
-		gspWaitForVBlank();
-
         hidScanInput();
 
         u32 kDown = hidKeysDown();
@@ -1044,10 +1040,11 @@ int main(int argc, char **argv)
                 listMenu(selOffset);
             }
         }
+        gfxFlushBuffers();
+        gfxSwapBuffers();
+		gspWaitForVBlank();
     }
-
-    srvExit();
-    aptExit();
+    
     gfxExit();
     return 0;
 }
