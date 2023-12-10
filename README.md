@@ -14,6 +14,7 @@ Everything is simple and made so you cannot possibly screw something up (or else
 - [ ] Separate settings for Sleeping/Awake
 - [ ] Instant preview when selecting a color
 - [ ] Save and restore feature
+- [ ] NFC color receiving ?
 - [x] ~~Toggle on/off~~
 - [ ] Proper UI ?
 
