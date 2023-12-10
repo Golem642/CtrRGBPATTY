@@ -10,7 +10,14 @@
 #include <dirent.h>
 #include <unistd.h>
 
-// TODO: Save/restore, Reset only one LED to default, Find how to change the "low battery" notification, Instant preview ?, Proper UI ?
+// TODO:
+// - Save/restore
+// - Separate settings for awake/asleep
+// - Reset only one LED to default
+// - Find how to change the "low battery" notification
+// - Instant preview ?
+// - NFC color receive ?
+// - Proper UI ?
 
 typedef struct {
     uint8_t r[32];
@@ -27,7 +34,7 @@ typedef struct {
     uint8_t b[32];
 } LED_MCU;
 
-std::string menu[10]={
+const char* menu[10] = {
     "Set notification RGB hex color",
     "Change pattern for LED",
     "Change animation speed (delay)",
@@ -40,7 +47,7 @@ std::string menu[10]={
     "Shutdown 3DS"
 };
 
-std::string installMenu[5]={
+const char* installMenu[5] = {
     "Sleep exit",
     "SpotPass",
     "StreetPass",
@@ -55,7 +62,7 @@ int nbInstall = 5;
 int nbCmd = nbMain;
 int nbCustom = 32;
 
-std::string patterns[5]={
+const char* patterns[5] = {
     "Blink  ",
     "Explode",
     "Rainbow",
@@ -63,7 +70,7 @@ std::string patterns[5]={
     "Custom "
 };
 
-std::string staticEnds[4]={
+const char* staticEnds[4] = {
     "None       ",
     "If sleeping",
     "If awake   ",
@@ -77,6 +84,14 @@ char keybInput[7] = "";
 // defaults
 char color_HEX[] = "2200ff"; // Originally 910b0b
 char color_copy[10] = "000000"; // 10 to avoid gcc compiling warnings
+
+// LIST OF COOL COLORS I FOUND (because i can)
+// - 2200ff : nice purple (default for this app)
+// - 910b0b : pink/beige (default for CtrRGBPATTY)
+// - 123456 : cool aqua green (could be better but i like it)
+// - 1100ff : might be even purpler ? idk
+// - 0022ff : light blue
+// - i forgor
 
 char anim_speed[] = "2f";
 char anim_smooth[] = "5f";
@@ -754,18 +769,18 @@ void listMenu(int dispOffset)
                         printf("\x1b[40;33m* Set custom notification pattern\x1b[30;0m\n");
                 } else {
                     if (i == selected)
-                        printf("\x1b[47;30m* %s\x1b[30;0m\n", menu[i].c_str());
+                        printf("\x1b[47;30m* %s\x1b[30;0m\n", menu[i]);
                     else
-                        printf("\x1b[30;0m* %s\n", menu[i].c_str());
+                        printf("\x1b[30;0m* %s\n", menu[i]);
                 }
             }
             printf("======================\n");
             printf("COLOR  : %s \e[48;2;%d;%d;%dm  \e[0m\n", color_HEX, colr, colg, colb);
-            printf("PATTERN : %s\n", patterns[selectedpat].c_str());
+            printf("PATTERN : %s\n", patterns[selectedpat]);
             printf("ANIMATION DELAY : %X\n", ANIMDELAY);
             printf("ANIMATION SMOOTHNESS : %X\n", ANIMSMOOTH);
             printf("LOOP DELAY : %X\n", LOOPBYTE);
-            printf("STATIC END : %s\n", staticEnds[staticend].c_str());
+            printf("STATIC END : %s\n", staticEnds[staticend]);
             printf("ENABLED : %s\e[0m\n", (enabled ? "\e[32mYES" : "\e[31mNO"));
             printf("======================\n");
         break;
@@ -774,9 +789,9 @@ void listMenu(int dispOffset)
             for (int i = 0; i < nbInstall; i++) 
             {
                 if (i == selected)
-                    printf("\x1b[47;30m* %s\x1b[30;0m\n", installMenu[i].c_str());
+                    printf("\x1b[47;30m* %s\x1b[30;0m\n", installMenu[i]);
                 else
-                    printf("\x1b[30;0m* %s\n", installMenu[i].c_str());
+                    printf("\x1b[30;0m* %s\n", installMenu[i]);
             }
             printf("======================\n");
             printf("(B) to cancel\n");
@@ -785,9 +800,9 @@ void listMenu(int dispOffset)
             printf("\e[40;36m(L) to copy, (R) to paste : \e[0m%s\n", color_copy);
             for (int i = dispOffset; i < dispOffset+27; i++) {
                 if (i == selected)
-                    printf("\x1b[47;30m%s%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\x1b[30;0m\n", (i < 10 ? "0" : ""), i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
+                    printf("\x1b[47;30m%s%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\x1b[30;0m\n", (i < 9 ? "0" : ""), i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(triggers only after loop)" : "")));
                 else
-                    printf("\x1b[37;40m%s%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\n", (i < 10 ? "0" : ""), i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(seems to not do anything)" : "")));
+                    printf("\x1b[37;40m%s%d: %s%X%s%X%s%X \e[48;2;%d;%d;%dm \e[0m%s\n", (i < 9 ? "0" : ""), i+1, (customLed.r[i] < 16 ? "0" : ""), customLed.r[i], (customLed.g[i] < 16 ? "0" : ""), customLed.g[i], (customLed.b[i] < 16 ? "0" : ""), customLed.b[i], customLed.r[i], customLed.g[i], customLed.b[i], (i == 31 ? "(may be 0 depending on static ending)" : (i == 0 ? "(triggers only after loop)" : "")));
             }
         break;
         default:
@@ -819,9 +834,8 @@ int main(int argc, char **argv)
 
     selected = 0;
     int selOffset = 0;
-
     bool infoRead = false;  
-    printf("Welcome to Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 !\n\nThis is a tool allowing you to change the color\nand pattern of the LED when you receive\na notification.\n\nYou can select for which type of notifications\nyou want it to apply from the install menu.\n\nThis is not the final version, i will include\nmore things in future updates.\n\n\nControls :\n- Arrow UP and DOWN to move,\n- (A) to confirm/toggle\n- (B) to go back to the main menu\n- START to reboot\n\n\e[32mPress (A) to continue\e[0m\n");
+    printf("Welcome to Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 !\n\nThis is a tool allowing you to change the color\nand pattern of the LED when you receive\na notification.\n\nYou can select for which type of notifications\nyou want it to apply from the install menu.\n\nThis is not the final version, i will include\nmore things in future updates.\n\n\nControls :\n- Arrow UP and DOWN to move,\n- (A) to confirm/toggle\n- (B) to go back to the main menu\n- START to reboot\n\n\e[32mPress (A) to continue\e[0m\t\t\e[38;2;255;165;0mVersion 2.3\e[0m\n");
     //listMenu();
 
     while (aptMainLoop()) 
@@ -833,7 +847,14 @@ int main(int argc, char **argv)
         if (aptCheckHomePressRejected()) {
             infoRead = true;
             listMenu(selOffset);
-            printf("Cannot return to the HOME Menu. START to reboot\n");
+            //printf("Cannot return to the HOME Menu. START to reboot\n");
+            printf("\nPress HOME again to exit, or START to reboot\n");
+            printf("\e[38;2;255;165;0mYour changes wont be applied until next reboot\e[0m\n");
+            aptSetHomeAllowed(true);
+        }
+
+        if (kDown) {
+            aptSetHomeAllowed(false);
         }
 
         if (kDown & KEY_START)
@@ -1044,7 +1065,7 @@ int main(int argc, char **argv)
         gfxSwapBuffers();
 		gspWaitForVBlank();
     }
-    
+
     gfxExit();
     return 0;
 }
