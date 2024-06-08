@@ -34,6 +34,14 @@ typedef struct {
     uint8_t b[32];
 } LED_MCU;
 
+typedef struct {
+    uint8_t seq[4];
+} LowBatPat;
+
+const char* mainMenu[1] = {
+    ""
+}
+
 const char* menu[10] = {
     "Set notification RGB hex color",
     "Change pattern for LED",
@@ -48,7 +56,7 @@ const char* menu[10] = {
 };
 
 const char* installMenu[5] = {
-    "Sleep exit",
+    "Boot & Wake up",
     "SpotPass",
     "StreetPass",
     "Join friend game ???",
@@ -61,6 +69,10 @@ int selected, nbMain = 10;
 int nbInstall = 5;
 int nbCmd = nbMain;
 int nbCustom = 32;
+
+int Xtsize = 50;
+int Xbsize = 40;
+int Ysize = 29;
 
 const char* patterns[5] = {
     "Blink  ",
@@ -100,21 +112,26 @@ char anim_blink_speed[] = "00";
 
 int staticend = 1;
 // DEFAULT 3DS SETTINGS :
-// - SLEEP EXIT : 0x50, 0x50, 0xFF, 0x00
+// - BOOT / WAKE UP : 0x50, 0x50, 0xFF, 0x00
 // - SPOTPASS : 0x50, 0x3C, 0xFF, 0x00
 // - STREETPASS : 0x50, 0x50, 0xFF, 0x00
 // - JOIN FRIEND GAME ??? : 0x68, 0x68, 0xFF, 0x00 (strange friend notification type but different)
 // - FRIENDS : 0x50, 0x3C, 0xFF, 0x00
-// - LOW BATTERY : not found for now :(
+// - LOW BATTERY : 0x55, 0x55, 0x55, 0x55  <- not actual settings, more like the sequence of the LED
 uint8_t ANIMDELAY = 0x2F; // 0x50
 uint8_t ANIMSMOOTH = 0x5F; // 0x3c
 uint8_t LOOPBYTE = 0xFF; // no loop
 uint8_t BLINKSPEED = 0x00; // https://www.3dbrew.org/wiki/MCURTC:SetInfoLEDPattern
+
+LowBatPat LBP;
+
 bool enabled;
 
 bool debugMode = false;
 
 LED customLed;
+
+PrintConsole topscreen, bottomscreen;
 
 static SwkbdState swkbd;
 static SwkbdStatusData swkbdStatus;
@@ -180,6 +197,10 @@ int fcopy(const char* source, const char* dest) {
         return 1;
     }
     return 0;
+}
+
+void printAt(int x, int y, const char* text) {
+    printf("\x1b[%d;%dH%s", y, x, text);
 }
 
 void intRGB(std::string hexCode, int *r, int *g, int *b)
@@ -383,7 +404,7 @@ void writeDefault(FILE* file) {
 
     LED_MCU temp;
 
-    // Sleep exit LED
+    // Boot / wake up LED
     temp.ani[0] = 0x50;
     temp.ani[1] = 0x50;
     temp.ani[2] = 0xFF;
@@ -612,7 +633,7 @@ void writepatch(LED note, int selectedType = 0)
 
         // PATCH
 
-        // SLEEP EXIT : 0x00A0C8 real address is 0x10A0C8
+        // Boot / wake up : 0x00A0C8 real address is 0x10A0C8
         // SPOTPASS : 0x00A190 real address is 0x10A190
         // STREETPASS : 0x00A258 real address is 0x10A258
         // JOIN FRIEND GAME ??? : 0x00A320 real address is 0x10A320
@@ -697,6 +718,39 @@ void ptmsysmSetInfoLedPattern(LED_MCU pattern)
     svcCloseHandle(serviceHandle);
 }
 
+void ptmsysmSetBatteryEmptyLedPattern(LowBatPat pattern)
+{
+    Handle serviceHandle = 0;
+    Result result = srvGetServiceHandle(&serviceHandle, "ptm:sysm");
+    if (result != 0) 
+    {
+        printf("Failed to get service ptm:sysm :(\n");
+        return;
+    }
+
+    u32* ipc = getThreadCommandBuffer();
+    ipc[0] = 0x8040040;
+    memcpy(&ipc[1], &pattern, 0x4);
+    svcSendSyncRequest(serviceHandle);
+    svcCloseHandle(serviceHandle);
+}
+
+void mcuhwcSetPowerLedPattern(int state) {
+    Handle serviceHandle = 0;
+    Result result = srvGetServiceHandle(&serviceHandle, "mcu::HWC");
+    if (result != 0) 
+    {
+        printf("Failed to get service mcu::HWC :(\n");
+        return;
+    }
+
+    u32* ipc = getThreadCommandBuffer();
+    ipc[0] = 0x60040;
+    ipc[1] = state;
+    svcSendSyncRequest(serviceHandle);
+    svcCloseHandle(serviceHandle);
+}
+
 void test_LED(LED patern)
 {
     LED_MCU MCU_PAT;
@@ -723,7 +777,14 @@ void test_LED(LED patern)
 
     printf("Testing custom pattern...\n");
 
-    ptmsysmSetInfoLedPattern(MCU_PAT);
+    if (debugMode) {
+        LBP.seq[0] = ANIMDELAY;
+        LBP.seq[1] = ANIMSMOOTH;
+        LBP.seq[2] = LOOPBYTE;
+        LBP.seq[3] = BLINKSPEED;
+        ptmsysmSetBatteryEmptyLedPattern(LBP);
+    }
+    else ptmsysmSetInfoLedPattern(MCU_PAT);
 }
 
 // when done we want LUMA to reload so it can patch with our ips patches
@@ -757,7 +818,7 @@ void listMenu(int dispOffset)
     intRGB(std::string(color_HEX), &colr, &colg, &colb);
     iprintf("\x1b[2J");
     printf("\x1b[0;0H\x1b[30;0m");
-    printf("===== Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 ===== %s\n", debugMode ? "[DEBUG MODE ACTIVATED]" : " ");
+    printf("=================== Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 ======%s======\n", debugMode ? "[DEBUG]" : "=======");
     switch (currMenu) {
         case 0:
             for (int i = 0; i < nbMain; i++) 
@@ -818,10 +879,15 @@ int main(int argc, char **argv)
 {
     gfxInitDefault();
     aptSetHomeAllowed(false);
-	
+
     // Init console for text output
-    consoleInit(GFX_TOP, NULL);
+    consoleInit(GFX_TOP, &topscreen);
+    consoleInit(GFX_BOTTOM, &bottomscreen);
+
+    consoleSelect(&bottomscreen);
     
+    for (int i = 0; i < 4; i++) { LBP.seq[i] = 0x55; }
+
     int r, g, b;
 
     for (int i = 0; i < 32; i++) {
@@ -837,6 +903,9 @@ int main(int argc, char **argv)
     bool infoRead = false;  
     printf("Welcome to Ctr\e[31mR\e[32mG\e[34mB\e[0mPAT2 !\n\nThis is a tool allowing you to change the color\nand pattern of the LED when you receive\na notification.\n\nYou can select for which type of notifications\nyou want it to apply from the install menu.\n\nThis is not the final version, i will include\nmore things in future updates.\n\n\nControls :\n- Arrow UP and DOWN to move,\n- (A) to confirm/toggle\n- (B) to go back to the main menu\n- START to reboot\n\n\e[32mPress (A) to continue\e[0m\t\t\e[38;2;255;165;0mVersion 2.3\e[0m\n");
     //listMenu();
+
+    int plstate = 0;
+
 
     while (aptMainLoop()) 
     {
@@ -867,6 +936,12 @@ int main(int argc, char **argv)
         if (kDown & KEY_Y) {
             debugMode = !debugMode;
             infoRead = true;
+            if (currMenu != 0) {
+                currMenu = 0;
+                nbCmd = nbMain;
+                selected = 0;
+                selOffset = 0;
+            }
             listMenu(selOffset);
         }
 
@@ -931,6 +1006,26 @@ int main(int argc, char **argv)
             listMenu(selOffset);
         }
 
+        if ((kDown & KEY_L) && debugMode && currMenu == 0)
+        {
+            plstate--;
+            if (plstate < 0) plstate = 6;
+            listMenu(currMenu);
+            printf("-1 to power LED state = %d\n", plstate);
+            printf("Sending sync to mcu::HWC...\n");
+            mcuhwcSetPowerLedPattern(plstate);
+        }
+
+        if ((kDown & KEY_R) && debugMode && currMenu == 0)
+        {
+            plstate++;
+            plstate = plstate%7;
+            listMenu(currMenu);
+            printf("+1 to power LED state = %d\n", plstate);
+            printf("Sending sync to mcu::HWC...\n");
+            mcuhwcSetPowerLedPattern(plstate);
+        }
+
         if (kDown & KEY_A)
         {
             if (infoRead) {
@@ -939,6 +1034,12 @@ int main(int argc, char **argv)
                         switch(selected)
                         {
                             case 0:
+                                if (debugMode) {
+                                    hexaInput((char *)anim_blink_speed, 2, "Animation blink speed");
+                                    BLINKSPEED = (uint8_t)strtol(anim_blink_speed, NULL, 16);
+                                    listMenu(selOffset);
+                                    break;
+                                }
                                 if (selectedpat == 4) {
                                     currMenu = 2;
                                     nbCmd = nbCustom;
